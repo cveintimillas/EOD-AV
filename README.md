@@ -30,6 +30,8 @@ Run
 ros2 launch gps_bringup gps.launch.py
 ```
 
+- The launch file now prepares the serial port before starting the driver by setting it to `115200`, `raw`, and disabling hardware flow control (`-crtscts`). This avoids the terminal waiting forever for an RTS/CTS handshake when the GPS module only streams data continuously.
+
 - Override serial settings:
 
 ```bash
@@ -63,11 +65,15 @@ newgrp dialout   # or log out and log in again
 ```bash
 # using screen
 sudo apt install -y screen
+sudo stty -F /dev/ttyUSB0 115200 raw -echo -echoe -echok -crtscts
 screen /dev/ttyUSB0 115200
 
 # or simple cat (useful for quick checks)
+sudo stty -F /dev/ttyUSB0 115200 raw -echo -echoe -echok -crtscts
 stdbuf -oL cat /dev/ttyUSB0 | sed -n '1,200p'
 ```
+
+- If the port stalls or appears empty, re-run the `stty` command above first. It tells Ubuntu not to wait for RTS/CTS and to read the GPS stream in raw mode.
 
 - Look for NMEA sentences that contain heading information (`PASHR`, `HDT`, `HDG`, `VTG`, or vendor-specific `$P...`). If you see them on the serial port, the driver can be used to surface them in ROS 2 (see next section).
 
