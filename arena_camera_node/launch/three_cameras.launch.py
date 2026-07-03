@@ -15,7 +15,7 @@ def generate_launch_description():
                 'width': 2048,
                 'height': 1536,
                 'pixelformat': 'rgb8',
-                'gain': 38.0,
+                'gain': 13.0,
                 'exposure_time': 28000.0,
                 'trigger_mode': False
             }]
@@ -32,7 +32,7 @@ def generate_launch_description():
                 'width': 2048,
                 'height': 1536,
                 'pixelformat': 'rgb8',
-                'gain': 38.0,
+                'gain': 13.0,
                 'exposure_time': 28000.0,
                 'trigger_mode': False
             }]
@@ -49,7 +49,7 @@ def generate_launch_description():
                 'width': 2048,
                 'height': 1536,
                 'pixelformat': 'rgb8',
-                'gain': 18.0,
+                'gain': 13.0,
                 'exposure_time': 28000.0,
                 'trigger_mode': False
             }]

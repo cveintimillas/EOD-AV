@@ -457,11 +457,12 @@ void ArenaCameraNode::set_nodes_roi_()
 
 void ArenaCameraNode::set_nodes_gain_()
 {
-  if (is_passed_gain_) {  // not default
     auto nodemap = m_pDevice->GetNodeMap();
-    Arena::SetNodeValue<double>(nodemap, "Gain", gain_);
-    log_info(std::string("\tGain set to ") + std::to_string(gain_));
-  }
+
+    Arena::SetNodeValue<GenICam::gcstring>(
+        nodemap,
+        "GainAuto",
+        "Continuous");
 }
 
 void ArenaCameraNode::set_nodes_pixelformat_()
