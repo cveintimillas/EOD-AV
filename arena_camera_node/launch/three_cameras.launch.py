@@ -17,7 +17,8 @@ def generate_launch_description():
                 'pixelformat': 'rgb8',
                 'gain': 13.0,
                 'exposure_time': 28000.0,
-                'trigger_mode': False
+                'trigger_mode': False,
+                'ptp_enable': True
             }]
         ),
 
@@ -34,7 +35,8 @@ def generate_launch_description():
                 'pixelformat': 'rgb8',
                 'gain': 13.0,
                 'exposure_time': 28000.0,
-                'trigger_mode': False
+                'trigger_mode': False,
+                'ptp_enable': True
             }]
         ),
 
@@ -51,7 +53,8 @@ def generate_launch_description():
                 'pixelformat': 'rgb8',
                 'gain': 13.0,
                 'exposure_time': 28000.0,
-                'trigger_mode': False
+                'trigger_mode': False,
+                'ptp_enable': True
             }]
         ),
     ])

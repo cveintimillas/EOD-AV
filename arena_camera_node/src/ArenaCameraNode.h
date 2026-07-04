@@ -75,6 +75,8 @@ class ArenaCameraNode : public rclcpp::Node
 
   bool trigger_mode_activated_;
 
+  bool ptp_enable_;
+
   std::string pub_qos_history_;
   bool is_passed_pub_qos_history_;
 
@@ -95,6 +97,7 @@ class ArenaCameraNode : public rclcpp::Node
   Arena::IDevice* create_device_ros_();
   void set_nodes_();
   void set_nodes_load_default_profile_();
+  void set_nodes_ptp_();
   void set_nodes_roi_();
   void set_nodes_gain_();
   void set_nodes_pixelformat_();

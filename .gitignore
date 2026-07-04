@@ -58,3 +58,8 @@ log/
 *.pyc
 *.pyo
 *.pyd
+
+# Markdown docs: keep README files tracked, ignore the rest
+*.md
+!README.md
+!**/README.md

@@ -43,6 +43,10 @@ void ArenaCameraNode::parse_parameters_()
     trigger_mode_activated_ = this->declare_parameter("trigger_mode", false);
     // no need to is_passed_trigger_mode_ because it is already a boolean
 
+    nextParameterToDeclare = "ptp_enable";
+    ptp_enable_ = this->declare_parameter("ptp_enable", true);
+    // no need for is_passed_ptp_enable_ because it is already a boolean
+
     nextParameterToDeclare = "topic";
     topic_ = this->declare_parameter(
         "topic", std::string("/") + this->get_name() + "/images");
@@ -413,6 +417,7 @@ Arena::IDevice* ArenaCameraNode::create_device_ros_()
 void ArenaCameraNode::set_nodes_()
 {
   set_nodes_load_default_profile_();
+  set_nodes_ptp_();
   set_nodes_roi_();
   set_nodes_gain_();
   set_nodes_pixelformat_();
@@ -430,6 +435,44 @@ void ArenaCameraNode::set_nodes_load_default_profile_()
   // execute the profile
   Arena::ExecuteNode(nodemap, "UserSetLoad");
   log_info("\tdefault profile is loaded");
+}
+
+void ArenaCameraNode::set_nodes_ptp_()
+{
+  auto nodemap = m_pDevice->GetNodeMap();
+
+  if (!ptp_enable_) {
+    log_info("\tPTP disabled (ptp_enable:=false)");
+    return;
+  }
+
+  try {
+    Arena::SetNodeValue<bool>(nodemap, "PtpEnable", true);
+    log_info("\tPtpEnable set to true");
+  } catch (GenICam::GenericException& e) {
+    log_err(std::string("\tFailed to set PtpEnable, continuing without PTP: ") +
+            e.what());
+    return;
+  }
+
+  // PtpSlaveOnly isn't in the confirmed-stable SDK API surface for every
+  // camera model/firmware — set defensively so a missing node never blocks
+  // startup.
+  try {
+    Arena::SetNodeValue<bool>(nodemap, "PtpSlaveOnly", true);
+    log_info("\tPtpSlaveOnly set to true");
+  } catch (GenICam::GenericException& e) {
+    log_warn(std::string("\tPtpSlaveOnly not available, skipping: ") +
+             e.what());
+  }
+
+  try {
+    GenICam::gcstring status =
+        Arena::GetNodeValue<GenICam::gcstring>(nodemap, "PtpStatus");
+    log_info(std::string("\tPtpStatus = ") + std::string(status.c_str()));
+  } catch (GenICam::GenericException& e) {
+    log_warn(std::string("\tFailed to read PtpStatus: ") + e.what());
+  }
 }
 
 void ArenaCameraNode::set_nodes_roi_()
