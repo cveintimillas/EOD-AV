@@ -24,10 +24,10 @@ set -euo pipefail
 # ============================================================
 # CONFIGURACIÓN — EDITAR ESTOS VALORES ANTES DE EJECUTAR
 # ============================================================
-CAM1_IFACE="enp3s0"            # Triton 1
-CAM2_IFACE="enp4s0"            # Triton 2
-CAM3_IFACE="enp5s0"            # Triton 3
-LIDAR_IFACE="CAMBIAR_ESTO"     # TODO: confirmar interfaz Linux del puerto del Hesai
+CAM1_IFACE="enp6s0"            # Triton 1
+CAM2_IFACE="enp7s0"            # Triton 2
+CAM3_IFACE="enp8s0"            # Triton 3
+LIDAR_IFACE="enp11s0"     # TODO: confirmar interfaz Linux del puerto del Hesai
 GPS_SERIAL_DEV="/dev/ttyUSB0"  # adaptador USB-serial dedicado a TPS (DCD) + NMEA (RX)
 PTP_DOMAIN=0
 # ============================================================

@@ -51,8 +51,15 @@ EOD-AV/
 ├── arena_camera_node/    # LUCID Arena camera driver (C++)
 ├── HesaiLidar_ROS_2.0/   # Hesai LiDAR driver, vendored from upstream
 ├── gps_bringup/          # NMEA GPS serial driver bringup
-└── eod_av_launch/        # combined launch files for the above
+├── eod_av_launch/        # combined launch files for the above
+└── setup/                # host-level provisioning for PTP time sync — see setup/README.md
 ```
+
+## Time synchronization (PTP)
+
+This is a dataset-creation project: recordings from the 3 cameras, the LiDAR, and the GNSS receiver only fuse correctly if every sensor timestamps its data off the **same clock**. Each device free-runs on its own clock otherwise, and their drift compounds over a recording session, corrupting alignment between camera frames, LiDAR scans, and GNSS/RTK position. IEEE 1588 PTP is what ties all of them to one shared, disciplined clock — that's what `setup/` provisions.
+
+[`setup/`](setup/) holds the host-side PTP provisioning script (`setup_ptp_sync.sh`) — see [setup/README.md](setup/README.md) for what the script does and why each part is necessary.
 
 ## License
 
