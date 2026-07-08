@@ -29,6 +29,9 @@ def generate_launch_description():
     )
 
     # ---------------- GPS ----------------
+    # path_child_frame:='hesai_lidar' hace que fix_to_path publique la TF
+    # dinamica map -> hesai_lidar (en vez de map -> gps_link), moviendo el
+    # frame del lidar a la ultima posicion del path en tiempo real.
     gps_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -36,7 +39,10 @@ def generate_launch_description():
                 'launch',
                 'gps.launch.py'   # ⚠️ si tu GPS usa otro nombre, lo ajustamos
             )
-        )
+        ),
+        launch_arguments={
+            'path_child_frame': 'hesai_lidar'
+        }.items()
     )
 
     return LaunchDescription([
