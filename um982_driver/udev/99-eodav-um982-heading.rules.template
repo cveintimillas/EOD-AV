@@ -1,0 +1,18 @@
+# EOD-AV: persistent name for the SECOND, dedicated serial link carrying the
+# UM982's proprietary PVTSLNA/BESTNAVA/HPR logs (velocity + heading).
+#
+# This is deliberately a DIFFERENT physical adapter/port from
+# /etc/udev/rules.d/99-eodav-gps.rules (see setup/setup_ptp_sync.sh), which
+# is reserved for gpsd's NMEA+PPS link feeding chrony's GPS+PPS refclock for
+# the PTP sync pipeline. Do not point this rule at the same device -- two
+# processes opening that tty at once was already hit once (see gps_bringup's
+# README) and corrupted both reads.
+#
+# NOT YET FILLED IN: replace UM982_HEADING_SERIAL below with the actual USB
+# serial number of the second adapter/port, found via:
+#   udevadm info -q property -n /dev/ttyUSBx | grep ID_SERIAL_SHORT
+# then copy this file (without the .template suffix) to
+# /etc/udev/rules.d/99-eodav-um982-heading.rules and run:
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{serial}=="D30HIC4U", SYMLINK+="um982_heading"

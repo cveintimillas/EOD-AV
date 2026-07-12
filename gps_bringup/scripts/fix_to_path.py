@@ -37,8 +37,11 @@ class FixToPath(Node):
         self.get_logger().info(f"Escuchando {fix_topic}, publicando /gps_path en '{self.frame}'")
 
     def cb(self, msg: NavSatFix):
-        # Descarta mensajes sin fix valido
-        if msg.status.status < 0 or math.isnan(msg.latitude):
+        # No usamos msg.status.status: gpsd_client siempre reporta STATUS_NO_FIX
+        # con gpsd >= 3.23 en fixes GPS simples (gpsd omite el campo "status" en
+        # su JSON salvo fixes DGPS o mejores, ver gitlab.com/gpsd/gpsd/-/issues/154).
+        # lat/lon en NaN es la unica senal fiable de "sin fix" que da gpsd_client.
+        if math.isnan(msg.latitude) or math.isnan(msg.longitude):
             return
 
         if self.origin is None:

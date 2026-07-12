@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>um982_driver</name>
+  <version>0.0.0</version>
+  <description>
+    Publishes GNSS velocity and dual-antenna heading from a Unicore UM982
+    (ArduSimple simpleRTK3B Compass) by parsing its proprietary PVTSLNA/
+    BESTNAVA/HPR logs via the um982-driver PyPI package. Position (/fix)
+    stays owned by gpsd_client in gps_bringup, which keeps PPS-disciplined
+    timestamps for the PTP sync pipeline; this package only adds the
+    heading/velocity data gpsd cannot parse.
+  </description>
+  <maintainer email="japolo1503@gmail.com">estudiante</maintainer>
+  <license>TODO: License declaration</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <!--
+    um982-driver (GPL-3.0) is a runtime pip dependency, not vendored or
+    exec_depend-ed here: it has no rosdep key (PyPI-only). Install with
+    `pip install um982-driver` per README.md before running this package's
+    nodes. Keeping it out-of-tree avoids pulling GPL-3.0 into this repo.
+  -->
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -3,19 +3,20 @@
 <package format="3">
   <name>gps_bringup</name>
   <version>0.0.0</version>
-  <description>Bringup package to launch the NMEA GPS serial driver (nmea_navsat_driver).</description>
+  <description>Bringup package to launch the GPS fix pipeline via gpsd_client (gpsd owns the serial port).</description>
   <maintainer email="cveintimillas@todo.todo">cveintimillas</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <exec_depend>nmea_navsat_driver</exec_depend>
-  <exec_depend>python3-pyserial</exec_depend>
+  <exec_depend>gpsd_client</exec_depend>
+  <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>um982_driver</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
