@@ -6,7 +6,7 @@ ROS 2 workspace for the EOD-AV sensor stack: 3x LUCID Arena cameras, a Hesai LiD
 
 | Package | Build type | Description |
 |---|---|---|
-| [`arena_camera_node`](arena_camera_node) | `ament_cmake` (C++) | LUCID Vision Labs Arena SDK driver node. `three_cameras.launch.py` starts 3 cameras (`enp3s0`, `enp4s0`, `enp5s0`), each publishing `sensor_msgs/Image` on its own topic. |
+| [`arena_camera_node`](arena_camera_node) | `ament_cmake` (C++) | LUCID Vision Labs Arena SDK driver node. `three_cameras.launch.py` starts 3 cameras (`enp6s0`, `enp7s0`, `enp8s0`), each publishing `sensor_msgs/Image` on its own topic. |
 | [`HesaiLidar_ROS_2.0`](HesaiLidar_ROS_2.0) (package `hesai_ros_driver`) | `ament_cmake` (C++) | Hesai LiDAR ROS 2 driver, vendored in-tree from [HesaiTechnology/HesaiLidar_ROS_2.0](https://github.com/HesaiTechnology/HesaiLidar_ROS_2.0) (includes the `HesaiLidar_SDK_2.0` source). `start.py` brings up the LiDAR node. |
 | [`gps_bringup`](gps_bringup) | `ament_cmake` | Bringup for the NMEA GNSS/GPS serial driver (`nmea_navsat_driver`), targeting a SimpleRTK3B receiver. See [gps_bringup/README.md](gps_bringup/README.md) for hardware/heading details and troubleshooting. |
 | [`eod_av_launch`](eod_av_launch) | `ament_python` | Top-level orchestration: includes the other packages' launch files to bring up camera+LiDAR (`camera_lidar_sync.launch.py`) or camera+LiDAR+GPS (`camera_lidar_gnss_sync.launch.py`) together. |

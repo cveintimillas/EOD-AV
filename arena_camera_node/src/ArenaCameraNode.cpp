@@ -52,6 +52,14 @@ void ArenaCameraNode::parse_parameters_()
         "topic", std::string("/") + this->get_name() + "/images");
     // no need to is_passed_topic_
 
+    nextParameterToDeclare = "frame_id";
+    // Defaults to the node name (e.g. "arena_cam_enp4s0") rather than
+    // anything camera-specific -- must be set explicitly per camera in the
+    // launch file to match the static_transform_publisher tree (see
+    // eod_av_launch/launch/static_transforms.launch.py), same as the other
+    // 2 Tritons and the Hesai.
+    frame_id_ = this->declare_parameter("frame_id", this->get_name());
+
     nextParameterToDeclare = "qos_history";
     pub_qos_history_ = this->declare_parameter("qos_history", "");
     is_passed_pub_qos_history_ = pub_qos_history_ != "";
@@ -267,7 +275,7 @@ void ArenaCameraNode::msg_form_image_(Arena::IImage* pImage,
         static_cast<uint32_t>(pImage->GetTimestampNs() / 1000000000);
     image_msg.header.stamp.nanosec =
         static_cast<uint32_t>(pImage->GetTimestampNs() % 1000000000);
-    image_msg.header.frame_id = std::to_string(pImage->GetFrameId());
+    image_msg.header.frame_id = frame_id_;
 
     //
     // 2 ) Height

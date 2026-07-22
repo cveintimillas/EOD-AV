@@ -42,9 +42,14 @@ def generate_launch_description():
     )
 
     # ---------------- GPS ----------------
-    # path_child_frame:='hesai_lidar' hace que fix_to_path publique la TF
-    # dinamica map -> hesai_lidar (en vez de map -> gps_link), moviendo el
-    # frame del lidar a la ultima posicion del path en tiempo real.
+    # path_child_frame se deja en el default de gps.launch.py ('base_link'):
+    # fix_to_path publica la TF dinamica map -> base_link, y de ahi cuelgan
+    # todas las static transforms (static_transforms.launch.py) hacia
+    # hesai_lidar/radar_fixed/las 3 camaras. Antes estaba en 'hesai_lidar',
+    # lo cual le daba a ese frame DOS padres a la vez (map dinamico +
+    # base_link estatico) -- un arbol TF invalido. Con base_link como unico
+    # hijo directo de map, los 5 frames de sensores se mueven juntos seguindo
+    # el GPS como un solo rigido.
     gps_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(
@@ -54,14 +59,25 @@ def generate_launch_description():
             )
         ),
         launch_arguments={
-            'path_child_frame': 'hesai_lidar',
             'enable_um982_heading': LaunchConfiguration('enable_um982_heading'),
         }.items()
+    )
+
+    # ---------------- STATIC TF ----------------
+    static_tf_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory('eod_av_launch'),
+                'launch',
+                'static_transforms.launch.py'
+            )
+        )
     )
 
     return LaunchDescription([
         enable_um982_heading_arg,
         camera_launch,
         lidar_launch,
-        gps_launch
+        gps_launch,
+        static_tf_launch,
     ])

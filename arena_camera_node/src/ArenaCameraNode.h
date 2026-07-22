@@ -57,6 +57,8 @@ class ArenaCameraNode : public rclcpp::Node
 
   std::string topic_;
 
+  std::string frame_id_;
+
   size_t width_;
   bool is_passed_width;
 
