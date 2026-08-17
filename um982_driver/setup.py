@@ -20,7 +20,7 @@ setup(
     maintainer_email='japolo1503@gmail.com',
     description='Velocity and dual-antenna heading publisher for the Unicore UM982 '
                 '(ArduSimple simpleRTK3B Compass), via the um982-driver PyPI package.',
-    license='TODO: License declaration',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',
@@ -29,6 +29,10 @@ setup(
     entry_points={
         'console_scripts': [
             'um982_heading_node = um982_driver.heading_node:main',
+            # Fuente ALTERNATIVA de los mismos dos topicos, leyendo las $GNHPR
+            # que ya pasan por gpsd. No necesita un segundo puerto serie ni la
+            # libreria um982. No correr los dos a la vez.
+            'gnss_heading_gpsd = um982_driver.gnss_heading_gpsd_node:main',
             'configure_um982 = um982_driver.configure_um982:main',
         ],
     },

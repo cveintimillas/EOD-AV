@@ -59,7 +59,9 @@ log/
 *.pyo
 *.pyd
 
-# Markdown docs: keep README files tracked, ignore the rest
-*.md
-!README.md
-!**/README.md
+# Markdown docs are TRACKED (design notes, guides, per-package docs).
+# The previous blanket `*.md` ignore silently dropped everything except
+# README.md -- including files that other docs link to, e.g.
+# setup/PTP_SYNC_CONTEXT.md and setup/guia_ptp_sincronizacion.md referenced
+# from setup/README.md. If you need to ignore a generated .md, ignore it by
+# explicit path instead of re-adding a blanket rule here.

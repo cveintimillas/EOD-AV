@@ -3,9 +3,35 @@
 <package format="3">
   <name>eod_av_launch</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>
+    Orquestacion de bring-up del stack de sensores EOD-AV: un launch por sensor
+    (cameras.launch.py, lidar.launch.py, radar.launch.py, gnss.launch.py), el
+    arbol TF estatico (modulo bringup.py) y un master
+    (all_sensors.launch.py) que corre todos sin duplicar ningun launch.
+  </description>
   <maintainer email="japolo1503@gmail.com">estudiante</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
+
+  <!-- Paquetes cuyos launch se incluyen en runtime: declararlos como
+       exec_depend fija el orden de build en colcon y deja que rosdep los
+       verifique. hesai_ros_driver es el nombre del paquete de HesaiLidar_ROS_2.0. -->
+  <exec_depend>arena_camera_node</exec_depend>
+  <exec_depend>hesai_ros_driver</exec_depend>
+  <exec_depend>ars430_ros_publisher</exec_depend>
+  <exec_depend>gps_bringup</exec_depend>
+  <exec_depend>um982_driver</exec_depend>
+  <exec_depend>eod_av_tools</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <!-- debayer_node (propio, eod_av_launch/debayer_node.py): convierte las
+       imagenes bayer_rggb8 de las camaras a .../image_color, porque RViz NO
+       demosaica Bayer (lo dibuja como luminancia, o sea en blanco y negro).
+       Se hace con OpenCV y numpy en vez de depender de image_proc. -->
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>rviz2</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>

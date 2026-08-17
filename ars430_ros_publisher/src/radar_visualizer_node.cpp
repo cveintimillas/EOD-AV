@@ -32,6 +32,15 @@ public:
   RadarVisualizerNode() : Node("radar_visualizer") {
     const std::string in  = declare_parameter<std::string>("input_topic", "/filtered_radar_packet_1");
     const std::string out = declare_parameter<std::string>("output_topic", "/radar_pointcloud_1");
+    // Frame the radar cloud/markers are stamped in. Default "radar_fixed".
+    // Set frame_id:=hesai_lidar to overlay the radar on the LiDAR frame
+    // (only geometrically correct once they're actually co-located / the
+    // extrinsics are measured -- see eod_av_launch/bringup.py).
+    frame_id_ = declare_parameter<std::string>("frame_id", BASE_FRAME);
+    // Whether this node ALSO publishes base_link -> frame_id itself. Turn off
+    // when eod_av_launch/bringup.py already owns the TF tree,
+    // otherwise the transform gets published from two places.
+    const bool publish_tf = declare_parameter<bool>("publish_tf", true);
 
     cloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(out, rclcpp::QoS(10));
     marker_pub_ = create_publisher<visualization_msgs::msg::Marker>("/visualization_marker", rclcpp::QoS(10));
@@ -39,16 +48,19 @@ public:
         in, rclcpp::QoS(50),
         [this](ars430_ros_publisher::msg::RadarPacket::ConstSharedPtr msg) { onPacket(msg); });
 
-    // radar_fixed is rigidly attached to base_link
-    tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
-    geometry_msgs::msg::TransformStamped t;
-    t.header.stamp = now();
-    t.header.frame_id = "base_link";
-    t.child_frame_id = BASE_FRAME;
-    t.transform.rotation.w = 1.0;
-    tf_broadcaster_->sendTransform(t);
+    if (publish_tf) {
+      // frame_id_ rigidly attached to base_link (identity until measured).
+      tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
+      geometry_msgs::msg::TransformStamped t;
+      t.header.stamp = now();
+      t.header.frame_id = "base_link";
+      t.child_frame_id = frame_id_;
+      t.transform.rotation.w = 1.0;
+      tf_broadcaster_->sendTransform(t);
+    }
 
-    RCLCPP_INFO(get_logger(), "Visualizing %s -> %s", in.c_str(), out.c_str());
+    RCLCPP_INFO(get_logger(), "Visualizing %s -> %s (frame %s)",
+                in.c_str(), out.c_str(), frame_id_.c_str());
   }
 
 private:
@@ -63,7 +75,7 @@ private:
   void emitCloud() {
     sensor_msgs::msg::PointCloud2 pc;
     pc.header.stamp = group_.front()->header.stamp;
-    pc.header.frame_id = BASE_FRAME;
+    pc.header.frame_id = frame_id_;
     pc.height = 1;
     pc.is_bigendian = false;
     pc.is_dense = true;
@@ -104,7 +116,7 @@ private:
   void publishFovLines(const builtin_interfaces::msg::Time& stamp) {
     for (int side = 0; side < 2; side++) {
       visualization_msgs::msg::Marker m;
-      m.header.frame_id = BASE_FRAME;
+      m.header.frame_id = frame_id_;
       m.header.stamp = stamp;
       m.ns = "radar_fov";
       m.id = side + 1;
@@ -123,6 +135,7 @@ private:
     }
   }
 
+  std::string frame_id_;
   std::vector<ars430_ros_publisher::msg::RadarPacket::ConstSharedPtr> group_;
   uint32_t group_ts_ = 0;
 

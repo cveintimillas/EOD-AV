@@ -4,7 +4,16 @@ Bringup package that publishes GPS fixes to ROS 2 via `gpsd_client`, reading fro
 system `gpsd` daemon instead of opening the GPS serial port directly.
 
 `gpsd` is provisioned by `setup/setup_ptp_sync.sh` and already owns the simpleRTK3B's
-serial port (NMEA on `ttyUSB0`, PPS on `ttyUSB1`) to feed chrony's GPS+PPS refclock.
+serial port to feed chrony's GPS+PPS refclock. **NMEA and PPS share one single
+adapter** (`/dev/gps_pps`, pinned by udev): `gpsd` can only correlate the fix with
+the pulse when both come off the same device. The older two-adapter wiring
+(NMEA on `ttyUSB0`, PPS on `ttyUSB1`) produced a fixed but spurious ~367 ms PPS
+offset and was abandoned — see `setup/README.md`.
+
+> **The adapter must have a DCD line.** `pps_ldisc` reads the pulse from DCD and
+> nowhere else. An FT232R works; an **FT230X does not** (basic UART: TXD/RXD/RTS/
+> CTS only). With the wrong chip, `/dev/ppsN` is still created and `ppstest` just
+> times out forever — it looks like a loose wire and it is not.
 If a ROS node also opened that same tty directly (as the old `nmea_serial_driver`
 based launch file did), the two processes would race for the same serial device and
 could corrupt each other's reads. `gpsd_client` avoids that by talking to `gpsd` over
@@ -107,3 +116,118 @@ Troubleshooting
 
 License
 - MIT
+
+---
+
+## Troubleshooting: `/fix` no publica nada y RViz dice que falta `map`
+
+Los dos síntomas son **el mismo problema visto en dos lugares**: sin `/fix` no
+hay pose, y `fix_to_path` sólo publica la TF `map -> base_link` después del
+primer fix válido, así que el frame `map` nunca llega a existir.
+
+Lo primero, siempre:
+
+```bash
+ros2 run gps_bringup diagnose_gnss.sh
+```
+
+Recorre los 6 eslabones de la cadena y dice en cuál se corta. Abajo, qué
+significa cada corte.
+
+### 0. El paquete `gpsd_client` no está instalado
+
+```
+[component_container-1] [ERROR] [gpsd_client_container]: Could not find requested resource in ament index
+[ERROR] [launch_ros.actions.load_composable_nodes]: Failed to load node 'gpsd_client' ...
+```
+
+Ese mensaje **no** habla de parámetros ni de gpsd: dice que no hay ningún plugin
+registrado con ese nombre, o sea que el paquete no está instalado. `gpsd_client`
+viene aparte (no está vendorizado en este workspace):
+
+```bash
+sudo apt install ros-$ROS_DISTRO-gpsd-client
+# o, desde el workspace (package.xml de gps_bringup ya lo declara como exec_depend):
+rosdep install --from-paths src --ignore-src -r -y
+
+ros2 component types | grep GPSDClientComponent   # verificación
+```
+
+`gps.launch.py` ahora chequea esto al arrancar y aborta con ese mensaje en vez
+de dejar el error opaco del contenedor.
+
+### 1. El componente `gpsd_client` no cargó
+
+```bash
+ros2 node list | grep gpsd
+#   /gpsd_client_container   <- está
+#   /gpsd_client             <- NO está  => el componente no cargó
+```
+
+`GPSDClientComponent` declara sus **7** parámetros con la sobrecarga *sólo-tipo*
+de rclcpp:
+
+```cpp
+this->declare_parameter("override_augmentation_source", rclcpp::PARAMETER_BOOL);
+```
+
+Esa forma declara el parámetro **sin valor por defecto**, o sea que exige un
+override. Si falta aunque sea uno, `declare_parameter` lanza
+`NoParameterOverrideProvidedException`, el constructor del componente revienta
+y el `component_container` **no lo carga pero sigue corriendo**. Resultado: el
+launch arranca sin errores visibles y `/fix` no existe.
+
+Los 7 obligatorios son `host`, `port`, `frame_id`, `publish_rate`,
+`use_gps_time`, `check_fix_by_variance` y `override_augmentation_source`.
+`gps.launch.py` los pasa todos.
+
+```bash
+ros2 param list /gpsd_client    # deben aparecer los 7
+```
+
+### 2. gpsd no tiene el device abierto
+
+Es el caso más engañoso: el nodo ROS está vivo, `/fix` existe como tópico, y no
+sale ni un mensaje. `gpsd_client::step()` hace:
+
+```cpp
+if (p == nullptr || !parser_->isOnline(*p))
+  return;
+```
+
+y `isOnline()` es `data.online.tv_sec > 0 || data.online.tv_nsec > 0`. Mientras
+gpsd no tenga un device activo, `online` es 0 y el nodo descarta todo **antes**
+de publicar.
+
+```bash
+gpspipe -w -n 5 localhost:2947        # ¿responde? ¿aparece "class":"DEVICES"?
+systemctl status gpsd-eodav.service
+sudo systemctl restart gpsd-eodav.service
+```
+
+### 3. El receptor no tiene lock (esto **no** es una falla)
+
+Bajo techo es lo normal. Con `check_fix_by_variance:=false` — que es como está
+configurado — `/fix` **se publica igual**, con `status=-1` y `lat/lon` en `NaN`:
+
+```bash
+ros2 topic hz /fix                    # ~10 Hz
+ros2 topic echo /fix --once           # latitude: nan
+```
+
+Eso ya demuestra que toda la cadena ROS funciona. Lo que falta es señal: la
+antena necesita cielo despejado y el primer lock en frío puede tardar varios
+minutos. Hasta entonces no hay TF `map -> base_link` y RViz sigue diciendo que
+el frame `map` no existe — es correcto, no hay pose que dibujar.
+
+El nodo `gnss_watchdog` (levantado por defecto, no publica ningún tópico)
+distingue los tres estados por consola: **MUDO** (software), **SIN FIX** (falta
+señal) y **CON FIX**.
+
+### Por qué `gnss.rviz` usa `Fixed Frame: base_link`
+
+Con `map` como Fixed Frame, sin lock RViz no dibuja **nada** y el único síntoma
+es `Fixed Frame [map] does not exist`, que se lee como si el software estuviera
+roto. Con `base_link` la ventana funciona siempre y `/gps_path` aparece cuando
+hay posición. Para seguir la trayectoria en un marco fijo, cambiá a `map` desde
+el desplegable una vez que haya fix.
