@@ -12,13 +12,17 @@ setup(
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
+        ('share/' + package_name + '/rviz', glob('rviz/*.rviz')),
     ],
+    scripts=['scripts/record_dataset.sh'],
     install_requires=['setuptools'],
     zip_safe=True,
     maintainer='estudiante',
     maintainer_email='japolo1503@gmail.com',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Orquestacion de bring-up del stack de sensores EOD-AV: un '
+                'launch por sensor + un master (all_sensors.launch.py) sin '
+                'launches duplicados.',
+    license='MIT',
     extras_require={
         'test': [
             'pytest',
@@ -26,6 +30,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            # TF ajustable en caliente por parametros (calibracion en vivo).
+            'tf_tuner = eod_av_launch.tf_tuner:main',
+            # Bayer -> RGB para visualizacion (RViz no demosaica Bayer).
+            'debayer_node = eod_av_launch.debayer_node:main',
         ],
     },
 )

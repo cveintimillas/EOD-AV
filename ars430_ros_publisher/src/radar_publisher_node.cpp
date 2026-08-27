@@ -79,6 +79,25 @@ public:
     pcap_file_ = declare_parameter<std::string>("pcap_file", "");
     pcap_loop_ = declare_parameter<bool>("pcap_loop", true);
     pcap_realtime_ = declare_parameter<bool>("pcap_realtime", true);
+    // De donde sale header.stamp de cada mensaje del radar.
+    //
+    // El ARS430 no habla PTP: no hay reloj que disciplinar, asi que la unica
+    // palanca de sincronizacion es DE DONDE se toma el timestamp.
+    //
+    //   true  (default en vivo) -> h->ts, el instante en que el DRIVER de red
+    //          recibio la trama, del orden de microsegundos contra
+    //          CLOCK_REALTIME. Es el mismo reloj que disciplina chrony y del
+    //          que cuelgan camaras y LiDAR via PTP.
+    //   false -> now(), el reloj del nodo en el momento de PARSEAR. Incluye el
+    //          bufferizado de libpcap (hasta 100 ms, el timeout de
+    //          pcap_open_live) y la latencia de scheduling del hilo de captura.
+    //
+    // En replay offline el default es false: los timestamps grabados estan en
+    // el pasado y estampar con ellos rompe la visualizacion en vivo (RViz
+    // descarta lo que quedo fuera de la ventana de TF). Para reprocesar un
+    // pcap conservando la linea de tiempo original, ponerlo en true a mano.
+    use_kernel_timestamp_ = declare_parameter<bool>(
+        "use_kernel_timestamp", pcap_file_.empty());
 
     pub_ = create_publisher<ars430_ros_publisher::msg::RadarPacket>(
         "/unfiltered_radar_packet_" + std::to_string(id_), rclcpp::QoS(50));
@@ -164,6 +183,14 @@ private:
       last_pkt_us_ = ts;
     }
 
+    // Timestamp de recepcion del kernel, para las dos rutas de parseo. Se
+    // guarda aca porque es donde `h` esta disponible; parsePacket() y
+    // parseObjectList() se llaman sincronicamente desde esta misma funcion,
+    // asi que siempre corresponde a la trama que se esta procesando.
+    frame_stamp_ = rclcpp::Time(static_cast<int32_t>(h->ts.tv_sec),
+                                static_cast<uint32_t>(h->ts.tv_usec) * 1000u,
+                                RCL_SYSTEM_TIME);
+
     if (h->caplen < ETH_HLEN_ + 20 + 8) return;
     if (frame[12] != 0x08 || frame[13] != 0x00) return; // IPv4 only
 
@@ -176,6 +203,12 @@ private:
     const uint8_t* udp = ip + ihl;
     const uint32_t avail = h->caplen - ETH_HLEN_ - ihl;  // bytes from UDP header onwards
     parsePacket(udp, avail);
+  }
+
+  // Timestamp a usar para el mensaje que se esta armando. Ver el comentario de
+  // use_kernel_timestamp en el constructor.
+  rclcpp::Time frameStamp() {
+    return use_kernel_timestamp_ ? frame_stamp_ : now();
   }
 
   void parsePacket(const uint8_t* p, uint32_t avail) {
@@ -235,7 +268,7 @@ private:
     }
 
     ars430_ros_publisher::msg::RadarPacket msg;
-    msg.header.stamp = now();
+    msg.header.stamp = frameStamp();
     msg.header.frame_id = "radar_fixed";
     msg.event_id = static_cast<uint8_t>(event);
     msg.time_stamp = rdU32LE(p + V2_OFF_TIMESTAMP);
@@ -289,7 +322,7 @@ private:
     lastMcObj_ = mc;
 
     ars430_ros_publisher::msg::RadarObjectList msg;
-    msg.header.stamp = now();
+    msg.header.stamp = frameStamp();
     msg.header.frame_id = "radar_fixed";
     msg.time_stamp = rdU32LE(p + V2_OFF_TIMESTAMP);
     msg.measurement_counter = mc;
@@ -321,6 +354,8 @@ private:
   bool pcap_loop_ = true;
   bool pcap_realtime_ = true;
   bool offline_ = false;
+  bool use_kernel_timestamp_ = true;
+  rclcpp::Time frame_stamp_{0, 0, RCL_SYSTEM_TIME};
   int64_t last_pkt_us_ = 0;
 
   pcap_t* pd_ = nullptr;

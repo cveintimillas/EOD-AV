@@ -8,11 +8,24 @@
 # processes opening that tty at once was already hit once (see gps_bringup's
 # README) and corrupted both reads.
 #
-# NOT YET FILLED IN: replace UM982_HEADING_SERIAL below with the actual USB
-# serial number of the second adapter/port, found via:
-#   udevadm info -q property -n /dev/ttyUSBx | grep ID_SERIAL_SHORT
-# then copy this file (without the .template suffix) to
-# /etc/udev/rules.d/99-eodav-um982-heading.rules and run:
-#   sudo udevadm control --reload-rules && sudo udevadm trigger
+# NO ESTA COMPLETADA. Reemplaza PONER_SERIAL_DEL_SEGUNDO_ADAPTADOR por el
+# numero de serie real del SEGUNDO adaptador:
 #
-SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{serial}=="D30HIC4U", SYMLINK+="um982_heading"
+#   1. Verifica cual usa gpsd, para NO repetirlo:
+#        udevadm info -q property -n "$(readlink -f /dev/gps_pps)" | grep ID_SERIAL_SHORT
+#   2. Enumera los demas y elegi uno DISTINTO:
+#        for d in /dev/ttyUSB*; do
+#          echo -n "$d "; udevadm info -q property -n "$d" | grep ID_SERIAL_SHORT
+#        done
+#   3. Copia este archivo (sin el sufijo .template) a
+#      /etc/udev/rules.d/99-eodav-um982-heading.rules y corre:
+#        sudo udevadm control --reload-rules && sudo udevadm trigger
+#
+# CUIDADO (bug real que estuvo en este archivo): antes esta linea traia el
+# serial D30HIC4U escrito, que es el MISMO que usa gpsd -- aparece como ejemplo
+# en setup/setup_ptp_sync.sh. Copiada tal cual, la regla apuntaba
+# /dev/um982_heading al puerto de gpsd e infringia justo lo que advierte el
+# parrafo de arriba. Se dejo un placeholder que NO matchea con nada para que la
+# falla sea evidente (el nodo avisa que el symlink no existe) en vez de
+# silenciosa (dos procesos peleando por el mismo tty).
+SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{serial}=="PONER_SERIAL_DEL_SEGUNDO_ADAPTADOR", SYMLINK+="um982_heading"

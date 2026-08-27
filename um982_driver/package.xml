@@ -12,7 +12,10 @@
     heading/velocity data gpsd cannot parse.
   </description>
   <maintainer email="japolo1503@gmail.com">estudiante</maintainer>
-  <license>TODO: License declaration</license>
+  <!-- This package's own code is MIT. The um982-driver PyPI dependency is
+       GPL-3.0 but stays an out-of-tree runtime dep (not vendored), so its
+       copyleft is not inherited here. -->
+  <license>MIT</license>
 
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>

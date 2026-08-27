@@ -10,10 +10,14 @@
 // std
 #include <chrono>      //chrono_literals
 #include <functional>  // std::bind , std::placeholders
+#include <mutex>       // std::mutex (runtime reconfigure)
+#include <thread>      // acquisition thread (keeps executor free for params)
+#include <vector>
 
 // ros
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp/timer.hpp>           // WallTimer
+#include <rcl_interfaces/msg/set_parameters_result.hpp>  // on_set_parameters
 #include <sensor_msgs/msg/image.hpp>  //image msg published
 #include <std_srvs/srv/trigger.hpp>   // Trigger
 
@@ -36,6 +40,11 @@ class ArenaCameraNode : public rclcpp::Node
 
   ~ArenaCameraNode()
   {
+    // The acquisition loop runs on its own thread; make sure it has stopped
+    // (rclcpp::ok() went false on shutdown) before the node is torn down.
+    if (m_acquisition_thread_.joinable()) {
+      m_acquisition_thread_.join();
+    }
     log_info(std::string("Destroying \"") + this->get_name() + "\" node");
   }
 
@@ -67,9 +76,19 @@ class ArenaCameraNode : public rclcpp::Node
 
   double gain_;
   bool is_passed_gain_;
+  std::string gain_auto_;  // "Off" | "Once" | "Continuous" (case-insensitive)
 
   double exposure_time_;
   bool is_passed_exposure_time_;
+  std::string exposure_auto_;  // "Off" | "Once" | "Continuous" (case-insensitive)
+
+  // Caps the acquisition rate (AcquisitionFrameRate). Needed because the
+  // camera otherwise free-runs as fast as the GigE link allows: switching
+  // pixelformat from rgb8 to a Bayer format frees ~3x the bandwidth, and
+  // without this cap the camera spends it on more frames instead of on the
+  // headroom that keeps frame delivery regular. <= 0 means "don't cap".
+  double frame_rate_;
+  bool is_passed_frame_rate_;
 
   std::string pixelformat_pfnc_;
   std::string pixelformat_ros_;
@@ -88,6 +107,23 @@ class ArenaCameraNode : public rclcpp::Node
   std::string pub_qos_reliability_;
   bool is_passed_pub_qos_reliability_;
 
+  // --- runtime reconfigure (ros2 param set while streaming) ---------------
+  // The acquisition loop (publish_images_) runs on this thread so that
+  // rclcpp::spin() on the main thread stays free to service the parameter
+  // set/get services. The parameter callback only flips dirty flags under the
+  // mutex; the actual Arena SDK calls happen in the acquisition thread
+  // (apply_pending_reconfig_), so the SDK is only ever touched from one thread.
+  std::thread m_acquisition_thread_;
+  std::mutex m_reconfig_mutex_;
+  bool m_gain_value_dirty_ = false;
+  bool m_gain_auto_dirty_ = false;
+  bool m_exposure_value_dirty_ = false;
+  bool m_exposure_auto_dirty_ = false;
+  bool m_resolution_dirty_ = false;
+  bool m_frame_rate_dirty_ = false;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr
+      m_param_cb_handle_;
+
   void parse_parameters_();
   void initialize_();
 
@@ -104,9 +140,15 @@ class ArenaCameraNode : public rclcpp::Node
   void set_nodes_gain_();
   void set_nodes_pixelformat_();
   void set_nodes_exposure_();
+  void set_nodes_frame_rate_();
   void set_nodes_trigger_mode_();
   void set_nodes_test_pattern_image_();
   void publish_images_();
+
+  // runtime reconfigure
+  rcl_interfaces::msg::SetParametersResult on_set_parameters_(
+      const std::vector<rclcpp::Parameter>& params);
+  void apply_pending_reconfig_();
 
   void publish_an_image_on_trigger_(
       std::shared_ptr<std_srvs::srv::Trigger::Request> request,

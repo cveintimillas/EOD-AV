@@ -7,7 +7,6 @@ sync pipeline, and this node must not contend for that serial port or that
 responsibility. This node only adds velocity and heading, which gpsd cannot
 parse from the UM982's proprietary PVTSLNA/BESTNAVA/HPR logs.
 """
-import math
 import os
 import time
 from typing import Optional, Tuple
@@ -18,6 +17,10 @@ import rclpy
 from rclpy.node import Node
 
 from sensor_msgs.msg import Imu
+
+# Vive en nmea_heading (sin dependencias de ROS ni de la libreria um982)
+# para que gnss_heading_gpsd_node pueda reusarla sin arrastrar UM982Serial.
+from um982_driver.nmea_heading import euler_deg_to_quaternion
 
 from um982.UM982 import UM982Serial
 
@@ -36,25 +39,6 @@ _CONNECT_RETRY_MAX_S = 5.0
 _UNMEASURED_ANGULAR_VARIANCE = 1e6
 
 
-def euler_deg_to_quaternion(
-    roll_deg: float, pitch_deg: float, yaw_deg: float,
-) -> Tuple[float, float, float, float]:
-    """Convert roll/pitch/yaw (degrees, REP-103 body frame) to a quaternion (x, y, z, w)."""
-    roll = math.radians(roll_deg)
-    pitch = math.radians(pitch_deg)
-    yaw = math.radians(yaw_deg)
-
-    cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
-    cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
-    cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
-
-    qw = cr * cp * cy + sr * sp * sy
-    qx = sr * cp * cy - cr * sp * sy
-    qy = cr * sp * cy + sr * cp * sy
-    qz = cr * cp * sy - sr * sp * cy
-    return qx, qy, qz, qw
-
-
 class Um982HeadingNode(Node):
     """Polls a UM982Serial instance and republishes velocity + heading on ROS 2 topics."""
 
@@ -66,11 +50,25 @@ class Um982HeadingNode(Node):
         self.declare_parameter('baud', 115200)
         self.declare_parameter('frame_id', 'gps_link')
         self.declare_parameter('publish_rate_hz', 10.0)
+        # Sondeo DESACOPLADO de la publicacion. Ver el comentario largo de
+        # _on_timer: sondear mas rapido que el receptor acota el error de
+        # atribucion del timestamp, y como solo se publica cuando la muestra
+        # cambia, subirlo NO agrega mensajes al bag -- solo los sella mejor.
+        # 0 o negativo => usar publish_rate_hz (comportamiento anterior).
+        self.declare_parameter('poll_rate_hz', 50.0)
 
         self._port: str = self.get_parameter('port').value
         self._baud: int = self.get_parameter('baud').value
         self._frame_id: str = self.get_parameter('frame_id').value
         publish_rate_hz: float = self.get_parameter('publish_rate_hz').value
+        poll_rate_hz: float = self.get_parameter('poll_rate_hz').value
+        if poll_rate_hz <= 0.0:
+            poll_rate_hz = publish_rate_hz
+
+        # Ultima muestra publicada, para no republicar con un sello nuevo algo
+        # que el receptor no volvio a medir.
+        self._last_vel: Optional[Tuple[float, ...]] = None
+        self._last_orientation: Optional[Tuple[float, ...]] = None
 
         if self._port == '/dev/um982_heading' and not os.path.exists(self._port):
             self.get_logger().warn(
@@ -83,11 +81,15 @@ class Um982HeadingNode(Node):
         self._driver: Optional[UM982Serial] = None
         self._connect()
 
-        timer_period_s = 1.0 / publish_rate_hz
         self._velocity_pub = self.create_publisher(
             TwistWithCovarianceStamped, '/gnss/velocity', 10)
         self._heading_pub = self.create_publisher(Imu, '/gnss/heading', 10)
-        self._timer = self.create_timer(timer_period_s, self._on_timer)
+        self._timer = self.create_timer(1.0 / poll_rate_hz, self._on_timer)
+        self.get_logger().info(
+            f'Sondeo a {poll_rate_hz:.1f} Hz, publicando solo al cambiar la '
+            f'muestra: error de atribucion del timestamp <= '
+            f'{1000.0 / poll_rate_hz:.0f} ms. Reloj = CLOCK_REALTIME '
+            f'(disciplinado por el PPS del GNSS via chrony).')
 
     def _connect(self) -> None:
         backoff_s = _CONNECT_RETRY_INITIAL_S
@@ -108,19 +110,44 @@ class Um982HeadingNode(Node):
 
     def _on_timer(self) -> None:
         assert self._driver is not None
-        # NOTE (known limitation, T1 scope): timestamp is software time at the
-        # moment this node reads the already-parsed sample, not hardware/PTP
-        # time. Unlike gpsd's /fix, the UM982's own log timestamps are not used
-        # here. Integrating with the PTP/PPS work is explicitly future work,
-        # not resolved by this node.
+
+        # DE QUE RELOJ SALE ESTE TIMESTAMP
+        # De `get_clock().now()`, que es CLOCK_REALTIME. Ese ES el reloj
+        # sincronizado del sistema: chrony lo disciplina con el PPS del GNSS a
+        # ~3 us RMS (medido), y es el MISMO reloj contra el que se comparan las
+        # camaras, el LiDAR y el radar. O sea que la escala de tiempo de
+        # /gnss/velocity y /gnss/heading ya es la del resto del dataset.
+        #
+        # LO QUE NO RESUELVE EL RELOJ: LA ATRIBUCION
+        # UM982Serial parsea en un hilo de fondo y deja la ultima muestra en
+        # `self.vel` / `self.orientation`, sin decir cuando llego. Asi que el
+        # sello marca CUANDO SE LEYO la muestra, no cuando se midio. Dos
+        # consecuencias, y las dos se atacan aca:
+        #
+        #   1. Error de atribucion <= un periodo de sondeo. Antes se sondeaba a
+        #      publish_rate_hz (10 Hz) = hasta 100 ms de error. Ahora se sondea
+        #      a poll_rate_hz (50 Hz por defecto) => <= 20 ms.
+        #
+        #   2. Sellos INVENTADOS. Si la muestra no cambio, publicarla otra vez
+        #      con un timestamp nuevo afirma una medicion que nunca ocurrio.
+        #      Es exactamente el problema que tenia /fix con publish_rate por
+        #      encima de la tasa del receptor. Se corta comparando con la
+        #      anterior y publicando SOLO si cambio.
+        #
+        # El techo real es la latencia del propio receptor, que no se puede ver
+        # desde aca porque la libreria no expone la hora del log. Para bajar de
+        # ~20 ms habria que parsear el UM982 directamente y usar el campo de
+        # tiempo de sus sentencias.
         now = self.get_clock().now().to_msg()
 
         vel = self._driver.vel
-        if vel is not None:
+        if vel is not None and vel != self._last_vel:
+            self._last_vel = vel
             self._publish_velocity(now, vel)
 
         orientation = self._driver.orientation
-        if orientation is not None:
+        if orientation is not None and orientation != self._last_orientation:
+            self._last_orientation = orientation
             self._publish_heading(now, orientation)
 
     def _publish_velocity(

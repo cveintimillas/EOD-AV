@@ -43,7 +43,7 @@ sudo setcap 'cap_net_raw=pe' install/ars430_ros_publisher/lib/ars430_ros_publish
 ## 2. Ejecutar
 
 ```bash
-# Radar en vivo (defaults: iface enx00e04c3604d7, puerto 40000, RViz incluido)
+# Radar en vivo (defaults: iface enp9s0, puerto 40000, RViz incluido)
 ros2 launch ars430_ros_publisher radar_live.launch.py
 
 # Sin filtros (diagnóstico: ver TODO lo que reporta el radar)
@@ -56,8 +56,8 @@ ros2 launch ars430_ros_publisher radar_live.launch.py pcap_file:=/ruta/radar_raw
 Recordad preparar la red antes (igual que en Noetic):
 
 ```bash
-sudo ip addr add 10.1.1.10/24 dev enx00e04c3604d7 && sudo ip link set enx00e04c3604d7 up
-sudo tcpdump -i enx00e04c3604d7 -c 5 'udp port 40000'   # debe verse 10.1.1.20 -> 239.0.0.1
+sudo ip addr add 10.1.1.10/24 dev enp9s0 && sudo ip link set enp9s0 up
+sudo tcpdump -i enp9s0 -c 5 'udp port 40000'   # debe verse 10.1.1.20 -> 239.0.0.1
 ```
 
 ## 3. Parámetros
@@ -67,7 +67,7 @@ sudo tcpdump -i enx00e04c3604d7 -c 5 'udp port 40000'   # debe verse 10.1.1.20 -
 | Parámetro | Default | Descripción |
 |---|---|---|
 | `id` | 1 | Sufijo de los topics |
-| `iface` | `enx00e04c3604d7` | Interfaz de red |
+| `iface` | `enp9s0` | Interfaz de red |
 | `port` | 40000 | Puerto UDP del radar |
 | `bpf_extra` | "" | Filtro BPF adicional |
 | `pcap_file` | "" | Si se indica, reproduce ese pcap en vez de capturar en vivo |
