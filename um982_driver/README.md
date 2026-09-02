@@ -12,9 +12,11 @@ PTP sync pipeline (`setup/setup_ptp_sync.sh`) -- see "Why not one node" below.
 
 ## Scope
 
-This covers instrumentation/config only (T1: node, T2: receiver config). It
-does **not** implement RTCM/NTRIP corrections or PPK post-processing --
-that architectural decision is explicitly out of scope here and unresolved.
+This covers instrumentation/config (T1: node, T2: receiver config) and raw
+capture for offline PPK (T4). It does **not** implement RTCM/NTRIP
+corrections or the PPK post-processing itself (RINEX conversion, RTKLIB
+solve) -- that stays offline, outside this package; see
+`PPK_IMPLEMENTATION.md`.
 
 ## Why not one node that also does /fix (gpsd conflict)
 
@@ -153,6 +155,20 @@ Idempotent: re-issuing the same log command on the same target/rate is a
 no-op on the receiver (re-asserts the same log, doesn't duplicate it), so
 running this again is safe. Pass `--no-save` to skip `SAVECONFIG`.
 
+**For T4 (raw PPK capture)**, add `--enable-ppk-raw` to also enable `OBSVMB`
+plus the ephemeris/ionosphere logs on the same `--target-com`:
+
+```bash
+ros2 run um982_driver configure_um982 \
+    --connect-port /dev/um982_heading --connect-baud 115200 \
+    --target-com COM3 --rate-hz 10 --enable-ppk-raw
+```
+
+This does **not** send `UNLOG`, `CONFIG SIGNALGROUP`, or a baud change --
+those reset the receiver and aren't validated against this hardware; run
+them separately by hand if ever needed. Untested against real hardware,
+like the base command above.
+
 ## T3 -- Field verification (checklist, not automated here)
 
 ```bash
@@ -165,6 +181,65 @@ ros2 topic echo /gnss/heading
 - Confirm velocity is the same order of magnitude as before (no fix topic
   to cross-check against here -- compare against `gpsd_client`'s `/fix`
   movement instead).
+
+## T4 -- Raw binary capture for offline PPK
+
+Tees the UM982's raw `OBSVMB` (observations) + ephemeris/ionosphere binary
+stream to a `.raw` file, for offline PPK post-processing with RTKLIB against
+a REGME base station -- see `PPK_IMPLEMENTATION.md` for the full pipeline
+(receiver context, why this is offline-only, `convbin`/`rnx2rtkp` commands).
+
+**Requires T2's `--enable-ppk-raw` to have been run first** so the receiver
+is actually emitting those logs -- this node only captures bytes, it never
+touches receiver config itself.
+
+**Mutually exclusive with `um982_heading_node` (T1).** Both open
+`/dev/um982_heading` directly; running them at the same time races for the
+same tty, the same failure class already hit once on the PTP-critical gpsd
+port (see "Why not one node" above). `um982_heading_node` is disabled by
+default today, so this is safe as long as it stays that way while T4 runs.
+
+```bash
+ros2 launch um982_driver um982_raw_log.launch.py raw_log_dir:=/media/<ssd>/datasets/gnss_raw
+```
+
+Parameters:
+
+| name | type | default | notes |
+|---|---|---|---|
+| `port` | string | `/dev/um982_heading` | same dedicated link as T1 |
+| `baud` | int | `115200` | confirmed-on-bench value |
+| `raw_log_enabled` | bool | `false` | master gate (see below) |
+| `raw_log_dir` | string | `/data/eod_av/gnss_raw` | placeholder -- point at the real SSD mount for the session |
+| `session_name` | string | `''` | `''` -> autogenerate `eodav_%Y%m%d_%H%M%S` (matches `record_dataset.sh`'s bag-folder naming, so the `.raw` file and the bag for a session are easy to pair up) |
+| `read_timeout_s` | float | `0.5` | pyserial read timeout in the capture thread |
+| `read_chunk_bytes` | int | `4096` | max bytes per read |
+| `status_log_period_s` | float | `10.0` | periodic "bytes written" info log; `<= 0` disables it |
+
+Output file: `<raw_log_dir>/<session_name>_um982.raw` -- matches
+`PPK_IMPLEMENTATION.md`'s `convbin -r unicore -v 3.04 -od -os -oi -ot
+<sesion>_um982.raw` exactly.
+
+Doesn't parse anything (`OBSVMB`/`*EPHB`/`*IONB` are Unicore binary frames,
+not NMEA) -- just tees bytes read to disk, so unlike `um982_heading_node` it
+has no dependency on the third-party `um982-driver` library, only on
+`pyserial` directly.
+
+Known limitations:
+
+- `raw_log_enabled` defaults to `false` at both the launch level
+  (`IfCondition`, the node process never starts) and the node parameter
+  level (fallback for bare `ros2 run`) -- both must be true, deliberately,
+  before the port is touched.
+- Bytes lost during a mid-session serial disconnect/reconnect are
+  unrecoverable -- the node reconnects with backoff (same 1.0s-5.0s pattern
+  as T1) and keeps writing to the same file, it does not attempt to recover
+  or re-request missed data.
+- This node never sends `UNLOG`, `CONFIG SIGNALGROUP`, a baud change, or any
+  other receiver reconfiguration -- that boundary is intentional (see T2's
+  `--enable-ppk-raw` note above), not an oversight to "fix" later.
+- Not verified against real hardware yet: no field session has produced a
+  `.raw` file to run through `convbin` and confirm end-to-end.
 
 ## License
 

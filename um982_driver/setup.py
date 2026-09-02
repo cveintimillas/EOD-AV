@@ -14,7 +14,7 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
     ],
-    install_requires=['setuptools', 'um982-driver'],
+    install_requires=['setuptools', 'um982-driver', 'pyserial'],
     zip_safe=True,
     maintainer='estudiante',
     maintainer_email='japolo1503@gmail.com',
@@ -34,6 +34,10 @@ setup(
             # libreria um982. No correr los dos a la vez.
             'gnss_heading_gpsd = um982_driver.gnss_heading_gpsd_node:main',
             'configure_um982 = um982_driver.configure_um982:main',
+            # Captura binaria cruda (OBSVMB + efemerides) para PPK offline. Comparte
+            # puerto fisico con um982_heading_node -- NO correr los dos a la vez (ver
+            # README y raw_log_node.py).
+            'um982_raw_log_node = um982_driver.raw_log_node:main',
         ],
     },
 )

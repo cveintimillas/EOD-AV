@@ -25,6 +25,17 @@ import serial
 _LOG_COMMANDS = ('PVTSLNA', 'BESTNAVA', 'HPR')
 _RESPONSE_TIMEOUT_S = 2.0
 
+# Captura cruda para PPK offline (ver PPK_IMPLEMENTATION.md). OBSVMB son las
+# observaciones (pseudo-rango/fase); las *EPHB/*IONB son las efemerides e
+# ionosfera por constelacion -- sin ambas, RTKLIB no puede reprocesar la
+# trayectoria. Las efemerides cambian lento (son datos de orbita, no de
+# posicion), por eso van a un periodo mucho mas largo que las observaciones.
+_PPK_OBS_COMMAND = 'OBSVMB'
+_PPK_EPHEMERIS_COMMANDS = (
+    'GPSEPHB', 'BDSEPHB', 'BD3EPHB', 'GLOEPHB', 'GALEPHB',
+    'GPSIONB', 'BDSIONB', 'GALIONB',
+)
+
 
 def _send_command(ser: serial.Serial, command: str) -> str:
     ser.reset_input_buffer()
@@ -44,6 +55,8 @@ def _send_command(ser: serial.Serial, command: str) -> str:
 
 def configure(
     connect_port: str, connect_baud: int, target_com: str, rate_hz: float, save: bool,
+    enable_ppk_raw: bool = False, obsvmb_rate_hz: float = 10.0,
+    ephemeris_period_s: float = 60.0,
 ) -> int:
     """
     Send the log-enable commands (and optionally SAVECONFIG) to the UM982.
@@ -52,6 +65,15 @@ def configure(
     """
     period_s = 1.0 / rate_hz
     commands = [f'{log} {target_com} {period_s:g}' for log in _LOG_COMMANDS]
+
+    if enable_ppk_raw:
+        obs_period_s = 1.0 / obsvmb_rate_hz
+        commands.append(f'{_PPK_OBS_COMMAND} {target_com} {obs_period_s:g}')
+        commands += [
+            f'{log} {target_com} {ephemeris_period_s:g}'
+            for log in _PPK_EPHEMERIS_COMMANDS
+        ]
+
     if save:
         commands.append('SAVECONFIG')
 
@@ -87,10 +109,26 @@ def main() -> None:
              'persisting to receiver NVM (this is a one-time provisioning script by default -- '
              'see README for why SAVECONFIG was chosen as the default).'
     )
+    parser.add_argument(
+        '--enable-ppk-raw', action='store_true',
+        help='Also enable OBSVMB + ephemeris/ionosphere logs (GPSEPHB/BDSEPHB/BD3EPHB/'
+             'GLOEPHB/GALEPHB/GPSIONB/BDSIONB/GALIONB) on the same --target-com, for raw '
+             'capture destined to offline PPK (see PPK_IMPLEMENTATION.md). Does NOT send '
+             'UNLOG, CONFIG SIGNALGROUP, or a baud change -- those reset the receiver and are '
+             'not validated against this hardware; run them separately by hand if needed.'
+    )
+    parser.add_argument(
+        '--obsvmb-rate-hz', type=float, default=10.0,
+        help='OBSVMB rate when --enable-ppk-raw is set.')
+    parser.add_argument(
+        '--ephemeris-period-s', type=float, default=60.0,
+        help='Period (seconds) for the ephemeris/ionosphere logs when --enable-ppk-raw is set '
+             '-- these are slowly-changing orbit data, not position, so a long period suffices.')
     args = parser.parse_args()
 
     sys.exit(configure(
-        args.connect_port, args.connect_baud, args.target_com, args.rate_hz, args.save))
+        args.connect_port, args.connect_baud, args.target_com, args.rate_hz, args.save,
+        args.enable_ppk_raw, args.obsvmb_rate_hz, args.ephemeris_period_s))
 
 
 if __name__ == '__main__':

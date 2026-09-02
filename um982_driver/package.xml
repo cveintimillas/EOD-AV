@@ -20,6 +20,11 @@
   <exec_depend>rclpy</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <!-- pyserial: BSD, has a real rosdep key -- unlike um982-driver below, no
+       licensing reason to keep it out-of-tree/undeclared. Used directly by
+       configure_um982.py and raw_log_node.py (both talk serial without the
+       um982-driver library). -->
+  <exec_depend>python3-serial</exec_depend>
   <!--
     um982-driver (GPL-3.0) is a runtime pip dependency, not vendored or
     exec_depend-ed here: it has no rosdep key (PyPI-only). Install with
